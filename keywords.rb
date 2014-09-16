@@ -1,6 +1,12 @@
 #!/usr/bin/ruby
 # Encoding: utf-8
+require 'net/http'
+require 'uri'
 require 'stemmify'
+
+# This is only a toy.  Do not use for anything resembling production work.
+# The program's basic premise is to take a text, grab the most frequent
+# uncommon words, and determine if Snopes has a verdict.
 
 # Keywords assumes that short words are not likely to be important.
 # Change this value to set the minimum word length.
@@ -9,6 +15,13 @@ MinLength = 5
 # We generally only need a handful of keywords to perform a useful
 # search.  Change this value to set how many will be used.
 MaxWords = 10
+
+# Just pulling out the keywords isn't very useful.  In this case,
+# we'll check Snopes to see if they have a source and use
+# DuckDuckGo's non-JavaScript search for the actual search.
+SearchSite = "https://duckduckgo.com/html/?q=site%3A"
+SearchTarget = "snopes.com"
+BaseSearchUrl = SearchSite + SearchTarget + "+"
 
 # Holds an individual word.
 class Word
@@ -42,6 +55,20 @@ class Stem
       end
     end
   end
+end
+
+# Simple--possibly oversimplified--routine to send an HTTP request and
+# filter out lines that fail to match a pattern.
+def getHttpLines(html, filter)
+  url = URI.parse(html)
+  result = Net::HTTP.start(url.host, url.port, :use_ssl => url.scheme == 'https') do |http|
+    http.get(url.to_s)
+  end
+  if !result.is_a?(Net::HTTPSuccess)
+    return
+  end
+  lines = result.body.split("\n")
+  return lines.select{ |l| l =~ filter }
 end
 
 # We need a file name
@@ -93,7 +120,13 @@ end
 # Sort by frequency.
 stems = stems.to_a.collect { |kv| kv[1] }.sort { |a,b| a.count <=> b.count }
 
-# Grab the most frequent
+# Grab the most frequent keywords for the search string.
 n = [MaxWords, stems.length].min
-stems[-n..-1].each { |s| puts s.shortest + " (" + s.count.to_s + ")" }
+url = BaseSearchUrl + stems[-n..-1].collect { |s| s.shortest }.join('+')
+
+# Get the first search result and find the verdict.
+lines = getHttpLines(url, /<a rel="nofollow" class="large" /)
+parts = lines[0].split('"')
+lines = getHttpLines(parts[5], /<NOINDEX><TABLE>/)
+lines.each { |l| puts l.gsub(/<[^>]*>/, "") }
 
