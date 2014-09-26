@@ -122,6 +122,7 @@ stems = stems.to_a.collect { |kv| kv[1] }.sort { |a,b| a.count <=> b.count }
 
 # Grab the most frequent keywords for the search string.
 n = [MaxWords, stems.length].min
+puts stems[-n..-1].collect { |s| s.shortest }.join(' ')
 url = BaseSearchUrl + stems[-n..-1].collect { |s| s.shortest }.join('+')
 
 # Get the first search result and find the verdict.
