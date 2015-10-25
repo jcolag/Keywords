@@ -25,50 +25,87 @@ BaseSearchUrl = SearchSite + SearchTarget + "+"
 
 # Holds an individual word.
 class Word
-  attr_accessor :name, :count, :stem
+  @name
+  @count
+  @stem
 
   def initialize(name)
     @name = name
     @count = 1
     @stem = name.stem
   end
+
+  def name
+    @name
+  end
+
+  def count
+    @count
+  end
+
+  def stem
+    @stem
+  end
+
+  def set_count(count)
+    @count = count
+  end
 end
 
 # Collects words into groups based on their stem.
 class Stem
-  attr_accessor :name, :instances, :shortest, :count
+  @name
+  @instances
+  @shortest
+  @count
 
   def initialize(name)
     @name = name
     @count = 0
-    @shortest = nil
+    @shortest = ""
     @instances = Array.new
+  end
+
+  def count
+    @count
+  end
+
+  def shortest
+    @shortest
   end
 
   # Handles the maintenance of finding another word with the same stem.
   def add(word)
     @instances << word
     @count += word.count
-    @instances.each do |i|
-      if @shortest == nil || @shortest.length > i.name.length
-        @shortest = i.name
+    @instances.each do |instance|
+      name = instance.name
+      if @shortest == "" || @shortest.length > name.length
+        @shortest = name
       end
     end
   end
 end
 
-# Simple--possibly oversimplified--routine to send an HTTP request and
-# filter out lines that fail to match a pattern.
-def getHttpLines(html, filter)
-  url = URI.parse(html)
-  result = Net::HTTP.start(url.host, url.port, :use_ssl => url.scheme == 'https') do |http|
-    http.get(url.to_s)
+# Utility class to mediate web access
+class Httper
+  @html
+  @url
+
+  def initialize(html)
+    @html = html
+    @url = URI.parse(html)
   end
-  if !result.is_a?(Net::HTTPSuccess)
-    return
+
+  # Simple--possibly oversimplified--routine to send an HTTP request and
+  # filter out lines that fail to match a pattern.
+  def get_lines(filter)
+    result = Net::HTTP.start(@url.host, @url.port, :use_ssl => @url.scheme == 'https') do |http|
+      http.get(@url.to_s)
+    end
+    return if !result.is_a?(Net::HTTPSuccess)
+    return result.body.split("\n").select { |line| line =~ filter }
   end
-  lines = result.body.split("\n")
-  return lines.select{ |l| l =~ filter }
 end
 
 # We need a file name
@@ -98,7 +135,7 @@ File.foreach(inputname) do |s|
       message[w] = Word.new(w)
     else
       wd = message[w]
-      wd.count += 1
+      wd.set_count(wd.count + 1)
     end
   end
 end
@@ -126,8 +163,8 @@ puts stems[-n..-1].collect { |s| s.shortest }.join(' ')
 url = BaseSearchUrl + stems[-n..-1].collect { |s| s.shortest }.join('+')
 
 # Get the first search result and find the verdict.
-lines = getHttpLines(url, /<a rel="nofollow" class="large" /)
+lines = Httper.new(url).get_lines(/<a rel="nofollow" class="large" /)
 parts = lines[0].split('"')
-lines = getHttpLines(parts[5], /<NOINDEX><TABLE>/)
+lines = Httper.new(parts[5]).get_lines(/<NOINDEX><TABLE>/)
 lines.each { |l| puts l.gsub(/<[^>]*>/, "") }
 
