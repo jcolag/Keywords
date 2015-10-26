@@ -47,8 +47,8 @@ class Word
     @stem
   end
 
-  def set_count(count)
-    @count = count
+  def add
+    @count += 1
   end
 end
 
@@ -80,20 +80,16 @@ class Stem
     @count += word.count
     @instances.each do |instance|
       name = instance.name
-      if @shortest == "" || @shortest.length > name.length
-        @shortest = name
-      end
+      @shortest = name if @shortest == "" || @shortest.length > name.length
     end
   end
 end
 
 # Utility class to mediate web access
 class Httper
-  @html
   @url
 
   def initialize(html)
-    @html = html
     @url = URI.parse(html)
   end
 
@@ -103,7 +99,7 @@ class Httper
     result = Net::HTTP.start(@url.host, @url.port, :use_ssl => @url.scheme == 'https') do |http|
       http.get(@url.to_s)
     end
-    return if !result.is_a?(Net::HTTPSuccess)
+    return [ "" ] if !result.is_a?(Net::HTTPSuccess)
     return result.body.split("\n").select { |line| line =~ filter }
   end
 end
@@ -120,22 +116,19 @@ end
 inputname = ARGV[0]
 
 # Grab the words we're going to ignore.
-commonwords = File.readlines("c.txt")
-commonwords = commonwords.collect { |cw| cw.strip }
+commonwords = File.readlines("c.txt").collect { |cw| cw.strip }
 
 # Assume that any word that isn't short or common to most correspondence
 # is of interest.
 message = Hash.new
 File.foreach(inputname) do |s|
-  s = s.chop.downcase
-  s = s.gsub(/\p{^Alpha}/, ' ')
-  s.split(' ').each do |w|
+  s.chop.downcase.gsub(/\p{^Alpha}/, ' ').split(' ').each do |w|
     next if commonwords.include?(w) || w.length < MinLength
     if message[w] == nil
       message[w] = Word.new(w)
     else
       wd = message[w]
-      wd.set_count(wd.count + 1)
+      wd.add
     end
   end
 end
